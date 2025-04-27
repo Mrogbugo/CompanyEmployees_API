@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -22,7 +23,10 @@ namespace Entities.Models
 
         public string? Country { get; set; }
 
-        public ICollection<Employee>? Employee { get; set; }
+      /*  Navigational Properties: can not be mapped as colum 
+        these property serves as Relationship between model*/
+        public ICollection<Employee>? Employee { get; set; } 
+        
     }  
 
     public class Employee
@@ -39,6 +43,9 @@ namespace Entities.Models
         public string? Position { get; set; }
         [ForeignKey(nameof(Company))]
         public Guid CompanyId { get; set; }
+
+        /*  Navigational Properties: can not be mapped as colum 
+       these property serves as Relationship between model*/
         public Company? Company { get; set; }
 
     }

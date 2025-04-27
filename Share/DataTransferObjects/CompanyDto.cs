@@ -6,5 +6,6 @@ using System.Threading.Tasks;
 
 namespace Share.DataTransferObjects
 {
-        public record CompanyDto(Guid Id, string Name, string FullAddress); 
+    [Serializable]
+        public record CompanyDto(Guid Id, string Name , string FullAddress); 
 }
