@@ -1,7 +1,9 @@
 ﻿using Azure;
 using CompanyEmployees.ActionFilters;
+using Entities.LinkModels;
 using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
+using Presentation.ActionFilters;
 using Service.Contracts;
 using Share.DataTransferObjects;
 using Share.RequestFeatures;
@@ -22,15 +24,21 @@ namespace Presentation.Controllers
         public EmployeesController(IServiceManager service) => _service = service;
 
         [HttpGet]
-        public async Task <IActionResult> GetEmployeeFromCompany(Guid companyId, [FromQuery] EmployeeParameters employeeParameters)
+        [HttpHead]
+        [ServiceFilter(typeof(ValidateMediaTypeAttribute))]
+        public async Task<IActionResult> GetEmployeesForCompany(Guid companyId, [FromQuery] EmployeeParameters employeeParameters)
         {
-            var pagedResult = await _service.EmployeeService.GetEmployeesAsync(companyId, employeeParameters, trackChanges: false);
-            Response.Headers.Add("X-Pagination",JsonSerializer.Serialize(pagedResult.metaData)); 
-            return Ok(pagedResult.employees);
+            var linkParams = new LinkParameters(employeeParameters, HttpContext);
+
+            var result = await _service.EmployeeService.GetEmployeesAsync(companyId,
+             linkParams, trackChanges: false);
+
+            Response.Headers.Add("X-Pagination", JsonSerializer.Serialize(result.metaData));
+
+            return result.linkResponse.HasLinks ? Ok(result.linkResponse.LinkedEntities) : Ok(result.linkResponse.ShapedEntities);
 
         }
-
-        [HttpGet("{id:guid}", Name = "GetEmployeeForCompany")]
+            [HttpGet("{id:guid}", Name = "GetEmployeeForCompany")]
         public async Task <IActionResult> GetEmployeeForCompany(Guid companyId, Guid id )
         {
             var employee = await _service.EmployeeService.GetEmployeeAsync(companyId, id, trackChanges: false);

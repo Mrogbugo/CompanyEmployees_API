@@ -1,4 +1,8 @@
 ﻿using CompanyEmployees.ActionFilters;
+using Entities.LinkModels;
+using Entities.Responses;
+using Marvin.Cache.Headers;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Presentation.ModelBinders;
@@ -12,16 +16,30 @@ using System.Threading.Tasks;
 
 namespace Presentation.Controllers
 {
+  //  [ApiVersion("1.0")]
     [Route("api/companies")]
     [ApiController]
-    public class CompaniesController : ControllerBase
+    [ApiExplorerSettings(GroupName = "v1")]
+    //  [ResponseCache(CacheProfileName = "120SecondsDuration")]
+    public class CompaniesController : ApiControllerBase
     {
         private readonly IServiceManager _service;
-        public CompaniesController(IServiceManager service) =>
+        public CompaniesController(IServiceManager service) =>  _service = service;
 
-            _service = service;
 
-        [HttpGet]
+        [HttpOptions] 
+        public IActionResult GetCompaniesOptions()
+        {
+            Response.Headers.Add("Allow", "GET, POST, PUT, DELETE, OPTIONS");
+            return Ok();
+        }
+
+        /// <summary> 
+        /// Gets the list of all companies 
+        /// </summary> 
+        /// <returns>The companies list</returns> 
+        [HttpGet(Name = "GetCompanies")]
+        [Authorize(Roles = "Manager")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -31,25 +49,42 @@ namespace Presentation.Controllers
         public async Task <IActionResult> GetCompanies()
         {
             //   throw new Exception("Exception");
-            var companies =
-          await  _service.CompanyService.GetAllCompaniesAsync(trackChanges: false);
-            return Ok(companies);
+            var companies = await _service.CompanyService.GetAllCompaniesAsync(trackChanges: false);
+            var response = new ApiOkResponse<IEnumerable<CompanyDto>>(companies);
+            return Ok(response);
+            //var companies =  await  _service.CompanyService.GetAllCompaniesAsync(trackChanges: false);
+            //var companiesV2 = companies.Select(x => $"{x.Name} V2"); 
+            //return Ok(companiesV2);
         }
 
         [HttpGet("{id:guid}", Name = "GetCompanyById")]
+       // [ResponseCache(Duration = 60)] 
+        [HttpCacheExpiration(CacheLocation = CacheLocation.Public, MaxAge = 60)]
+        [HttpCacheValidation(MustRevalidate = false)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        public async Task<IActionResult> GetCompanyAsync(Guid id)
+        public async Task<IActionResult> GetCompany(Guid id)
         {
             var company = await _service.CompanyService.GetCompanyAsync(id, trackChanges: false);
-            return Ok(company);
+            if (company is null)
+                return ProcessError(new CompanyNotFoundResponse(id));
+            var response = new ApiOkResponse<CompanyDto>(company);
+            return Ok(response);
         }
 
-        [HttpPost]
+        /// <summary> 
+        /// Creates a newly created company 
+        /// </summary> 
+        /// <param name="company"></param> 
+        /// <returns>A newly created company</returns> 
+        /// <response code="201">Returns the newly created item</response> 
+        /// <response code="400">If the item is null</response> 
+        /// <response code="422">If the model is invalid</response> 
+        [HttpPost (Name = "CreateCompany")]
         [ServiceFilter(typeof(ValidationFilterAttribute))]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -133,5 +168,7 @@ namespace Presentation.Controllers
           await  _service.CompanyService.UpdateCompanyAsync(id, company, trackChanges: true);
             return NoContent();
         }
+        
+
     }
 }

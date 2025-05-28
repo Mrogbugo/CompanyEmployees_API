@@ -1,11 +1,16 @@
-﻿using CompanyEmployees.ActionFilters;
+﻿using AspNetCoreRateLimit;
+using CompanyEmployees.ActionFilters;
 using CompanyEmployees.Extensions;
+using CompanyEmployees.Utility;
 using Contracts;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Formatters;
 using Microsoft.Extensions.Options;
 using NLog;
+using Presentation.ActionFilters;
+using Service.DataShaping;
+using Share.DataTransferObjects;
 using System.Linq;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -27,6 +32,7 @@ try
     builder.Services.ConfigureSqlContext(builder.Configuration);
     builder.Services.AddAutoMapper(typeof(Program));
     builder.Services.AddScoped<ValidationFilterAttribute>();
+    builder.Services.AddScoped<IDataShaper<EmployeeDto>, DataShaper<EmployeeDto>>();
 
     //builder.Services.Configure<ApiBehaviorOptions>(options =>
     //{
@@ -38,6 +44,7 @@ try
         config.RespectBrowserAcceptHeader = true;
         config.ReturnHttpNotAcceptable = true;
         config.InputFormatters.Insert(0,GetJsonPatchInputFormatter());
+        config.CacheProfiles.Add("120SecondsDuration", new CacheProfile{ Duration =120});
     }).AddXmlDataContractSerializerFormatters()
     .AddApplicationPart(typeof(CompanyEmployees.Presentation.AssemblyReference).Assembly);
 
@@ -45,7 +52,24 @@ try
     builder.Services.Configure<ApiBehaviorOptions>(options => {
         options.SuppressModelStateInvalidFilter = true;
     });
-     
+
+    builder.Services.AddCustomMediaTypes();
+    builder.Services.AddScoped<ValidateMediaTypeAttribute>();
+    builder.Services.AddScoped<IEmployeeLinks, EmployeeLinks>();
+    builder.Services.ConfigureVersioning();
+    builder.Services.ConfigureResponseCaching();
+    builder.Services.ConfigureHttpCacheHeaders();
+    builder.Services.AddMemoryCache();
+    builder.Services.ConfigurationRateLimitingOption();
+    builder.Services.AddHttpContextAccessor();
+    builder.Services.AddAuthentication();
+    builder.Services.ConfigureIdentity();
+    builder.Services.ConfigureJWT(builder.Configuration);
+    builder.Services.AddJwtConfiguration(builder.Configuration);
+    builder.Services.ConfigureSwagger();
+    builder.Services.AddMediatR(cfg=>cfg.RegisterServicesFromAssemblies(typeof(Program).Assembly));
+    //builder.Services.ConfigureSwagger();
+
     NewtonsoftJsonPatchInputFormatter GetJsonPatchInputFormatter() =>
         new ServiceCollection().AddLogging().AddMvc().AddNewtonsoftJson()
         .Services.BuildServiceProvider()
@@ -69,7 +93,17 @@ try
         ForwardedHeaders = ForwardedHeaders.All
     });
     app.UseCors("CordPolicy");
+    app.UseIpRateLimiting();
+    app.UseResponseCaching();
+    app.UseHttpCacheHeaders();
+    app.UseAuthentication(); 
     app.UseAuthorization();
+    app.UseSwagger();
+    app.UseSwaggerUI(s =>
+    {
+        s.SwaggerEndpoint("/swagger/v1/swagger.json", "Code Maze API v1");
+        s.SwaggerEndpoint("/swagger/v2/swagger.json", "Code Maze API v2");
+    });
     app.MapControllers();
 
     app.Run();
